@@ -1706,23 +1706,15 @@ colours_dict={'Blue':0,'Red':1,'Green':2,'IR':3}
 labels=['teff','logg','fe_h','fe_h','alpha','vrad_Blue','vrad_Green','vrad_Red','vrad_IR','vsini','vmac','vmic']  
 
 
-cluster_name='Melotte_22'
-global large_data
+
           
 
-# large_data=[x for x in large_data if x['sobject_id'] in open_cluster_sobject_id]
-# large_data=vstack(large_data)
-#Needs to be read because some spectra doesnt have 
+
+#Needs to be loaded now so the program works
 global x_min,x_max
 tmp = np.load("NN_normalized_spectra_all_elements_Blue.npz")   
 labels_with_limits=['teff','logg','fe_h','vmic','vsini','Li','C','N','O','Na','Mg','Al','Si','K','Ca','Sc','Ti','V','Cr','Mn','Co','Ni','Cu','Zn','Rb','Sr','Y','Zr','Mo','Ru','Ba','La','Ce','Nd','Sm','Eu']
 
-# votable = parse(cluster_name+"_cross_galah_light.xml")
-file_directory = cluster_name+'_reduction_priors/plots/'
-Path(file_directory).mkdir(parents=True, exist_ok=True)
-# cross_data=votable.get_first_table().to_table(use_names_over_ids=True)
-
-# cross_data=cross_data
 
 x_min=tmp['x_min']
 x_max=tmp['x_max']
@@ -1738,6 +1730,21 @@ parameters_no_elements=['teff','logg','fe_h','vmic','vsini','vrad_Blue','vrad_Gr
 parameters_no_vrad=['teff','logg','fe_h','vmic','vsini','Li','C','N','O','Na','Mg','Al','Si','K','Ca','Sc','Ti','V','Cr','Mn','Co','Ni','Cu','Zn','Rb','Sr','Y','Zr','Mo','Ru','Ba','La','Ce','Nd','Sm','Eu']
 elements=['Li','C','N','O','Na','Mg','Al','Si','K','Ca','Sc','Ti','V','Cr','Mn','Co','Ni','Cu','Zn','Rb','Sr','Y','Zr','Mo','Ru','Ba','La','Ce','Nd','Sm','Eu']
 def main_analysis(sobject_id_name,ncpu=1):
+    """
+    main loop of the program, insert a sobject ID of the star you want to be reduced, insert also how many cpus you want it to run with
+
+    Parameters
+    ----------
+    sobject_id_name : int
+        sobject if of the star.
+    ncpu : int, optional
+        how many cpus do you want the program to run with . The default is 1.
+
+    Returns
+    -------
+    None.
+
+    """
     prior=False
     votable = parse("minimum_photometric_cross.xml")
     global photometric_data
@@ -1794,7 +1801,8 @@ def main_analysis(sobject_id_name,ncpu=1):
     
     step_iteration=20
     important_lines, important_molecules = load_dr3_lines()
-        
+    
+    #This is the place where you can see the reduction in time. the EMCEE analysis calls the los_posterior to sample the probability space
     with Pool(processes=ncpu) as pool:
         sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior,pool=pool,args=[parameters_no_vrad,prior,parameters])
         

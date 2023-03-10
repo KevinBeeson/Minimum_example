@@ -210,7 +210,7 @@ def example_loop(input_data):
     #in this function the slow part is the signal.fftconvolve
     synthetic_spectra=synth_resolution_degradation(wavelength_synthetic,synthetic_spectra,res_map,res_b,wavelength,l_new,kernel_)
 
-# for x in range(1,10):
+
 ncpu=1
 t0=time.time()
 #just added pool as was playing with changing the numbers of cpus I dont get much of an imporvement above 6 and sometimes the cpu makes it worse

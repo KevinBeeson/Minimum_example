@@ -196,9 +196,10 @@ wavelength_synthetic=np.linspace(3900, 4600,50750)
 l_new,kernel_=synth_resolution_degradation(wavelength_synthetic,np.ones(50750),res_map,res_b,wavelength)[1:]
 
 
-#creates some fake data to input to the neural network model
-how_much_data=5000
-all_input_data=np.random.normal(0.0,0.1,size=(how_much_data,36))
+#creates some fake data to input to the neural network model 
+
+number_of_iteration=1000 #change me for the number iterations
+all_input_data=np.random.normal(0.0,0.1,size=(number_of_iteration,36))
 
 import time
 
@@ -217,4 +218,4 @@ with Pool(processes=ncpu) as pool:
     pool.map(example_loop,all_input_data)
 
 t1=time.time()
-print(t1-t0)
+print("took " +str(t1-t0)+ " s for "+str(number_of_iteration) +" iterations")

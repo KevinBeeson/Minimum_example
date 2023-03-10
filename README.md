@@ -8,7 +8,7 @@ All the dependencies are in the environment.yml file. Just create a new envirome
 
 You can run the code by doing bash bash_looper_analysis.sh the out_put will be in run_out_puts
 
-I've put 5 different examples
+I've put 5 different examples (spectrum)
 
 170830002301099
 
@@ -22,7 +22,7 @@ I've put 5 different examples
 
 You can change how many things you run by inputting these files into minimal_run.txt.
 
-For this minimum example if I only run 1 file I get around 3-4 seconds per iteration but if I run all 5 at once I get 7-8 seconds per iteration so a doubling....
+For this minimum example if I only run 1 file I get around 3-4 seconds per iteration but if I run all 5 at once I get 7-8 seconds per iteration so a doubling.... If you run it with 1 spectra it should take 40 seconds and with 5 it will take around 1 min 10, so double.
 
 You can also change the number of CPUs for each spectra by changing the number after -n in the bash_looper_analysis.sh. Use only 1 of the specta. and you will see that after you put in more than 5 cpus the program actually slows down. This shouldnt make sense as I am sampling 36 dimensions with 72 walkers....
 

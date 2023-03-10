@@ -1807,6 +1807,7 @@ def main_analysis(sobject_id_name,ncpu=1):
         sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior,pool=pool,args=[parameters_no_vrad,prior,parameters])
         
         print('doing first iteration for masks')
+        #You can change the number of iterations to make it run for longer 
         for sample in sampler.sample(pos_short,iterations=10, progress=True):
             if sampler.iteration % step_iteration:
                     continue

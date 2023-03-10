@@ -128,15 +128,15 @@ def log_posterior(solar_values,parameters,prior=False,full_parameters=None,inser
         if not starting_test(solar_values,spectras.old_abundances,parameters,cluster=True):
               return -np.inf
         # print('passed')
+        
         shift=shift_maker(solar_values,given_labels=parameters,all_labels=full_parameters)
-        # shift['teff']=(shift['teff']+6000)*10
-        # try:
+
+        # synthesezes new spectra the main things that take time in this function is synth_resolution_degradation (fftconvole) and Payne_synthesize
         synthetic_spectras=spectras.synthesize(shift,give_back=True)
         normalized_spectra=[rgetattr(spectras,x+'.spec') for x in spectras.bands]
         normalized_uncs=[rgetattr(spectras,x+'.uncs') for x in spectras.bands]
     
-    
-        # normalized_spectra,normalized_uncs=spectras.normalize(data=synthetic_spectras)
+
         if insert_mask is None:
             if create_limit_mask==True:
                 normalized_limit_array=spectras.limit_array(give_back=True,observed_spectra=normalized_spectra)
@@ -314,62 +314,7 @@ def starting_test(solar_values,old_abundances,parameters=['teff','logg','fe_h','
                     return False
 
         return True
-def leaky_relu(z,grad=False):
-    '''
-    This is the activation function used by default in all our neural networks.
-    '''
-    limits=(z > 0)
-    leaky=z*limits + 0.01*z*np.invert(limits)
-    if grad:
-        return leaky,limits
-    return leaky
 
-def payne_sythesize(solar_values,x_min,x_max,NN_coeffs,grad=False):
-        """
-        Synthesizes the spectra using Payne
-    
-        Parameters
-        ----------
-        solar_values : a 1x8 array( the solar value arrays without vrad )  using teff,logg,monh,fe,alpha,vrad,vsini,vmac,vmic order
-        x_min : min value for payne
-        x_max : max values for payne
-        NN_coeffs :Matrix coefficients gotten from Payne 
-    
-        Returns
-        -------
-        real_spec : 1xn array which is the payne sythesized spectra
-    
-        """
-    
-        scaled_labels = (solar_values-x_min)/(x_max-x_min) - 0.5
-        w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max = NN_coeffs
-        if grad is False:
-            
-            inside =np.einsum('ij,j->i', w_array_0, scaled_labels)+ b_array_0
-            inside1=np.einsum('ij,j->i', w_array_1, leaky_relu(inside))+ b_array_1
-            real_spec=np.einsum('ij,j->i', w_array_2, leaky_relu(inside1))+ b_array_2
-            return real_spec
-
-        else:
-            inside =np.einsum('ij,j->i', w_array_0, scaled_labels)+ b_array_0
-            limit_1,leaked=leaky_relu(inside,True)
-            # leaked=np.ones(len(w_array_0))
-            # grad_return=w_array_0.T*leaked 
-            # grad_return=w_array_0.T
-            
-            grad_return=w_array_0.T*leaked + 0.01*w_array_0.T*np.invert(leaked)
-            
-            inside =np.einsum('ij,j->i', w_array_1, limit_1)+ b_array_1
-            limit_2,leaked=leaky_relu(inside,True)
-            grad_return=np.dot(grad_return,w_array_1.T)
-            # leaked=np.ones(len(grad_return.T))
-            # grad_return=grad_return*leaked 
-            grad_return=grad_return*leaked + 0.01*grad_return*np.invert(leaked)
-            
-            real_spec =np.einsum('ij,j->i', w_array_2,limit_2)+ b_array_2
-            grad_return=np.dot(grad_return,w_array_2.T)
-            return real_spec,grad_return
-        # real_spec = spectral_model.get_spectrum_from_neural_net(scaled_labels = scaled_labels, NN_coeffs = NN_coeffs)
 
 def galah_kern(fwhm, b):
         """ Returns a normalized 1D kernel as is used for GALAH resolution profile """
@@ -448,88 +393,7 @@ def numba_syth_resolution(coefficients,l_new,sampl,min_sampl,last_frequency):
         
         return l_new
 
-def synth_resolution_degradation(wave_synth, synth,res_map,res_b,wave_original,l_new_premade=None,kernel_=None,synth_res=300000.0,grad=None):
-        """
-        Take a synthetic spectrum with a very high  resolution and degrade its resolution to the resolution profile of the observed spectrum. The synthetic spectrum should not be undersampled, or the result of the convolution might be wrong.
-        Parameters:
-            synth np array or similar: an array representing the synthetic spectrum. Must have size m x 2. First column is the wavelength array, second column is the flux array. Resolution of the synthetic spectrum must be constant and higher than that of the observed spectrum.
-            synth_res (float): resolving power of the synthetic spectrum
-        Returns:
-            Convolved syntehtic spectrum as a np array of size m x 2.
-        """
-        synth=np.vstack((wave_synth,synth)).T
-        
-        l_original=wave_synth
-        #check if the shape of the synthetic spectrum is correct
-        if synth.shape[1]!=2: logging.error('Syntehtic spectrum must have shape m x 2.')
 
-        #check if the resolving power is high enough
-        sigma_synth=synth[:,0]/synth_res
-        # if max(sigma_synth)>=min(res_map)*0.95: logging.error('Resolving power of the synthetic spectrum must be higher.')
-
-        #check if wavelength calibration of the synthetic spectrum is linear:
-        if abs((synth[:,0][1]-synth[:,0][0])-(synth[:,0][-1]-synth[:,0][-2]))/abs(synth[:,0][1]-synth[:,0][0])>1e-6:
-            logging.error('Synthetic spectrum must have linear (equidistant) sampling.')        
-
-        #current sampling:
-        sampl=galah_sampl=synth[:,0][1]-synth[:,0][0]
-        galah_sampl=wave_original[1]-wave_original[0]
-
-
-        #original sigma
-        s_original=sigma_synth
-
-
-
-
-
-        #oversampling. If synthetic spectrum sampling is much finer than the size of the kernel, the code would work, but would return badly sampled spectrum. this is because from here on the needed sampling is measured in units of sigma.
-        oversample=galah_sampl/sampl*5.0
-
-        #minimal needed sampling
-
-        #keep adding samples until end of the wavelength range is reached
-        if l_new_premade is None:
-            #required sigma (resample the resolution map into the wavelength range of the synthetic spectrum)
-            s_out=np.interp(synth[:,0], wave_original, res_map)
-
-
-            #the sigma of the kernel is:
-            s=np.sqrt(s_out**2-s_original**2)
-
-            #fit it with the polynomial, so we have a function instead of sampled values:
-            map_fit=np.poly1d(np.polyfit(synth[:,0], s, deg=6))
-
-            #create an array with new sampling. The first point is the same as in the spectrum:
-            l_new=[synth[:,0][0]]
-
-            min_sampl=max(s_original)/sampl/sampl*oversample
-
-            l_new=np.array(numba_syth_resolution(map_fit.coef,l_new,sampl,min_sampl,synth[:,0][-1]))
-            kernel_=galah_kern(max(s_original)/sampl*oversample, res_b)
-
-        else:
-            l_new=l_new_premade
-        # while l_new[-1]<synth[:,0][-1]+sampl:
-        #     l_new.append(l_new[-1]+map_fit(l_new[-1])/sampl/min_sampl)
-
-        #interpolate the spectrum to the new sampling:
-        new_f=np.interp(l_new,synth[:,0],synth[:,1])
-
-        # con_f=ndimage.convolve(new_f, kernel_, output=x)
-        con_f=signal.fftconvolve(new_f,kernel_,mode='same')
-
-        #inverse the warping:
-        synth[:,1]=np.interp(l_original,l_new,con_f)
-        if l_new_premade is None:
-            return synth[:,1],l_new,kernel_
-        if not grad is None:
-            new_grad=[np.interp(np.array(l_new),synth[:,0],x) for x in grad]
-            con_grad=[signal.fftconvolve(x,kernel_,mode='same') for x in new_grad]
-            grad=[np.interp(l_original,np.array(l_new),x) for x in con_grad]
-            return synth[:,1],grad
-
-        return synth[:,1]
 
 class individual_spectrum:
     
@@ -1719,7 +1583,125 @@ def spread_masks(orginal_masks,spread=2):
             for x in range(max(0,value-spread),min(len_of_masks,value+spread)):
                 masks_temp[x]=0
     return masks_temp
+def leaky_relu(z,grad=False):
+    '''
+    This is the activation function used by default in all our neural networks.
+    '''
+    limits=(z > 0)
+    leaky=z*limits + 0.01*z*np.invert(limits)
+    if grad:
+        return leaky,limits
+    return leaky
 
+def payne_sythesize(solar_values,x_min,x_max,NN_coeffs,grad=False):
+        """
+        Synthesizes the spectra using Payne This takes alot of time
+    
+        Parameters
+        ----------
+        solar_values : a 1x8 array( the solar value arrays without vrad )  using teff,logg,monh,fe,alpha,vrad,vsini,vmac,vmic order
+        x_min : min value for payne
+        x_max : max values for payne
+        NN_coeffs :Matrix coefficients gotten from Payne 
+    
+        Returns
+        -------
+        real_spec : 1xn array which is the payne sythesized spectra
+    
+        """
+    
+        scaled_labels = (solar_values-x_min)/(x_max-x_min) - 0.5
+        w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2, x_min, x_max = NN_coeffs
+        if grad is False:
+
+            inside =np.einsum('ij,j->i', w_array_0, scaled_labels)+ b_array_0
+            inside1=np.einsum('ij,j->i', w_array_1, leaky_relu(inside))+ b_array_1
+            # This takes the most time in the function
+            real_spec=np.einsum('ij,j->i', w_array_2, leaky_relu(inside1))+ b_array_2
+            return real_spec
+def synth_resolution_degradation(wave_synth, synth,res_map,res_b,wave_original,l_new_premade=None,kernel_=None,synth_res=300000.0,grad=None):
+        """
+        this takes alot of time 
+        Take a synthetic spectrum with a very high  resolution and degrade its resolution to the resolution profile of the observed spectrum. The synthetic spectrum should not be undersampled, or the result of the convolution might be wrong.
+        Parameters:
+            synth np array or similar: an array representing the synthetic spectrum. Must have size m x 2. First column is the wavelength array, second column is the flux array. Resolution of the synthetic spectrum must be constant and higher than that of the observed spectrum.
+            synth_res (float): resolving power of the synthetic spectrum
+        Returns:
+            Convolved syntehtic spectrum as a np array of size m x 2.
+        """
+        synth=np.vstack((wave_synth,synth)).T
+        
+        l_original=wave_synth
+        #check if the shape of the synthetic spectrum is correct
+        if synth.shape[1]!=2: logging.error('Syntehtic spectrum must have shape m x 2.')
+
+        #check if the resolving power is high enough
+        sigma_synth=synth[:,0]/synth_res
+        # if max(sigma_synth)>=min(res_map)*0.95: logging.error('Resolving power of the synthetic spectrum must be higher.')
+
+        #check if wavelength calibration of the synthetic spectrum is linear:
+        if abs((synth[:,0][1]-synth[:,0][0])-(synth[:,0][-1]-synth[:,0][-2]))/abs(synth[:,0][1]-synth[:,0][0])>1e-6:
+            logging.error('Synthetic spectrum must have linear (equidistant) sampling.')        
+
+        #current sampling:
+        sampl=galah_sampl=synth[:,0][1]-synth[:,0][0]
+        galah_sampl=wave_original[1]-wave_original[0]
+
+
+        #original sigma
+        s_original=sigma_synth
+
+
+
+
+
+        #oversampling. If synthetic spectrum sampling is much finer than the size of the kernel, the code would work, but would return badly sampled spectrum. this is because from here on the needed sampling is measured in units of sigma.
+        oversample=galah_sampl/sampl*5.0
+
+        #minimal needed sampling
+
+        #keep adding samples until end of the wavelength range is reached
+        if l_new_premade is None:
+            #required sigma (resample the resolution map into the wavelength range of the synthetic spectrum)
+            s_out=np.interp(synth[:,0], wave_original, res_map)
+
+
+            #the sigma of the kernel is:
+            s=np.sqrt(s_out**2-s_original**2)
+
+            #fit it with the polynomial, so we have a function instead of sampled values:
+            map_fit=np.poly1d(np.polyfit(synth[:,0], s, deg=6))
+
+            #create an array with new sampling. The first point is the same as in the spectrum:
+            l_new=[synth[:,0][0]]
+
+            min_sampl=max(s_original)/sampl/sampl*oversample
+
+            l_new=np.array(numba_syth_resolution(map_fit.coef,l_new,sampl,min_sampl,synth[:,0][-1]))
+            kernel_=galah_kern(max(s_original)/sampl*oversample, res_b)
+
+        else:
+            l_new=l_new_premade
+        # while l_new[-1]<synth[:,0][-1]+sampl:
+        #     l_new.append(l_new[-1]+map_fit(l_new[-1])/sampl/min_sampl)
+
+        #interpolate the spectrum to the new sampling:
+        new_f=np.interp(l_new,synth[:,0],synth[:,1])
+
+        # This takes the most time in the function
+        con_f=signal.fftconvolve(new_f,kernel_,mode='same')
+
+        #inverse the warping:
+        synth[:,1]=np.interp(l_original,l_new,con_f)
+        if l_new_premade is None:
+            return synth[:,1],l_new,kernel_
+        if not grad is None:
+            new_grad=[np.interp(np.array(l_new),synth[:,0],x) for x in grad]
+            con_grad=[signal.fftconvolve(x,kernel_,mode='same') for x in new_grad]
+            grad=[np.interp(l_original,np.array(l_new),x) for x in con_grad]
+            return synth[:,1],grad
+
+        return synth[:,1]
 colours_dict={'Blue':0,'Red':1,'Green':2,'IR':3}
 labels=['teff','logg','fe_h','fe_h','alpha','vrad_Blue','vrad_Green','vrad_Red','vrad_IR','vsini','vmac','vmic']  
 
